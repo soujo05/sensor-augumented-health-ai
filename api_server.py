@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import io
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -73,9 +72,11 @@ def _get_paths() -> Tuple[Path, Path]:
 @lru_cache
 def _get_pipeline():
     _, model_path = _get_paths()
-    from src.shap_explainer import load_model
+    import joblib
 
-    return load_model(str(model_path))
+    if not model_path.exists():
+        raise FileNotFoundError(f"Model not found at: {model_path}")
+    return joblib.load(model_path)
 
 
 def _prepare_input_df(payload: PredictionInput):
@@ -110,74 +111,25 @@ def _generate_recommendations(values: Dict[str, object], risk_level: str) -> Lis
     return recommendations
 
 
-def _fig_to_base64() -> str:
-    import matplotlib.pyplot as plt
+def _model_contributors(pipeline) -> Tuple[List[Tuple[str, float]], List[Tuple[str, float]]]:
+    preprocessor = pipeline.named_steps.get("preprocessor")
+    model = pipeline.named_steps.get("model")
+    if preprocessor is None or not hasattr(model, "feature_importances_"):
+        return [], []
 
-    buffer = io.BytesIO()
-    plt.savefig(buffer, format="png", bbox_inches="tight", dpi=150)
-    plt.close()
-    buffer.seek(0)
-    return base64.b64encode(buffer.read()).decode("utf-8")
+    try:
+        names = [str(name) for name in preprocessor.get_feature_names_out()]
+    except Exception:
+        names = FEATURE_COLUMNS
 
-
-@lru_cache
-def _get_reference_shap() -> Tuple[np.ndarray, List[str], np.ndarray]:
-    import pandas as pd
-    from src.shap_explainer import compute_shap_values, prepare_shap_inputs
-
-    dataset_path, _ = _get_paths()
-    pipeline = _get_pipeline()
-
-    df = pd.read_csv(dataset_path)
-    sample = df[FEATURE_COLUMNS].sample(min(200, len(df)), random_state=42)
-    X_processed, feature_names = prepare_shap_inputs(pipeline, sample)
-    shap_values, _ = compute_shap_values(pipeline, X_processed)
-    return X_processed, feature_names, shap_values
-
-
-def _render_summary_plot() -> str:
-    import matplotlib
-    import shap
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    X_processed, feature_names, shap_values = _get_reference_shap()
-    shap.summary_plot(shap_values, X_processed, feature_names=feature_names, show=False,plot_size=None)
-    return _fig_to_base64()
-
-
-def _render_bar_plot() -> str:
-    import matplotlib
-    import shap
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    X_processed, feature_names, shap_values = _get_reference_shap()
-    shap.summary_plot(
-        shap_values, X_processed, feature_names=feature_names, plot_type="bar", show=False
+    importances = model.feature_importances_
+    ranked = sorted(
+        zip(names, importances),
+        key=lambda item: float(item[1]),
+        reverse=True,
     )
-    return _fig_to_base64()
-
-
-def _render_waterfall_plot(
-    shap_row, base_value: float, data_row, feature_names: List[str]
-) -> str:
-    import matplotlib
-    import shap
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    explanation = shap.Explanation(
-        values=shap_row,
-        base_values=base_value,
-        data=data_row,
-        feature_names=feature_names,
-    )
-    shap.plots.waterfall(explanation, show=False)
-    return _fig_to_base64()
+    positive = [(name, float(value)) for name, value in ranked[:6]]
+    return positive, []
 
 
 @app.get("/")
@@ -240,8 +192,6 @@ def get_model_metrics() -> Dict[str, object]:
 def predict(payload: PredictionInput) -> PredictionResponse:
     try:
         from src.database import create_tables, save_assessment
-        from src.shap_explainer import compute_shap_values, prepare_shap_inputs
-
         create_tables()
         pipeline = _get_pipeline()
         input_df = _prepare_input_df(payload)
@@ -253,20 +203,9 @@ def predict(payload: PredictionInput) -> PredictionResponse:
             prediction,
             risk_level
         )
-        X_processed, feature_names = prepare_shap_inputs(pipeline, input_df)
-        shap_values, base_value = compute_shap_values(pipeline, X_processed)
-        shap_row = shap_values[0]
-        print(feature_names)
-
-        positive, negative = top_contributors(shap_row, feature_names, top_n=6)
-        insights = generate_insights(positive, negative, payload)
+        positive, negative = _model_contributors(pipeline)
+        insights = generate_insights(positive, negative, payload.dict())
         recommendations = _generate_recommendations(payload.dict(), risk_level)
-
-        summary_plot = _render_summary_plot()
-        bar_plot = _render_bar_plot()
-        waterfall_plot = _render_waterfall_plot(
-            shap_row, base_value, X_processed[0], feature_names
-        )
 
         return PredictionResponse(
             risk_score=prediction,
@@ -287,9 +226,9 @@ negative_contributors=[
 ],
             insights=insights,
             recommendations=recommendations,
-            summary_plot=summary_plot,
-            bar_plot=bar_plot,
-            waterfall_plot=waterfall_plot,
+            summary_plot="",
+            bar_plot="",
+            waterfall_plot="",
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
