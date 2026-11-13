@@ -1,8 +1,14 @@
 import sqlite3
+import os
 from pathlib import Path
 
-# Database location
-DB_PATH = Path("database/healthrisk.db")
+# Vercel's deployed filesystem is read-only except for /tmp. Data stored there is
+# ephemeral, but it allows the API to initialize and serve requests.
+if os.getenv("VERCEL"):
+    DB_PATH = Path("/tmp/healthrisk.db")
+else:
+    DB_PATH = Path(__file__).resolve().parent.parent / "database" / "healthrisk.db"
+
 print("DATABASE PATH:", DB_PATH.resolve())
 
 def get_connection():
