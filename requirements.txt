@@ -2,8 +2,5 @@ pandas
 numpy
 scikit-learn
 joblib
-matplotlib
-shap
-streamlit
 fastapi
 uvicorn

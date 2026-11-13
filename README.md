@@ -113,6 +113,13 @@ cd AI-Health-Risk-Scoring-System
 pip install -r requirements.txt
 ```
 
+For the original local Streamlit dashboard, install the additional local
+dependencies instead:
+
+```bash
+pip install -r requirements-local.txt
+```
+
 ### Install Frontend Dependencies
 
 ```bash
@@ -190,7 +197,7 @@ Developed as part of the AI Health Risk Scoring System academic project.
 
 The Streamlit dashboard supports CSV upload under **Smartwatch Data Import**.
 
-1. Install dependencies: `pip install -r requirements.txt`
+1. Install dependencies: `pip install -r requirements-local.txt`
 2. Run from the project root: `streamlit run app.py`
 3. Upload `sample_data/smartwatch_export_demo.csv` (or a compatible CSV export).
 4. Enter the patient's static health information in the sidebar.
