@@ -111,6 +111,8 @@ def _generate_recommendations(values: Dict[str, object], risk_level: str) -> Lis
 
 
 def _fig_to_base64() -> str:
+    import matplotlib.pyplot as plt
+
     buffer = io.BytesIO()
     plt.savefig(buffer, format="png", bbox_inches="tight", dpi=150)
     plt.close()
