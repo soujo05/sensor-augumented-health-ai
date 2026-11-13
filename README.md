@@ -22,7 +22,7 @@ The AI Health Risk Scoring System is an intelligent healthcare analytics platfor
 
 ### Interactive Dashboard
 
-* Built using Next.js
+* Built using Streamlit
 * Modern responsive user interface
 * Dynamic patient input forms
 * Real-time prediction updates
@@ -50,9 +50,7 @@ The AI Health Risk Scoring System is an intelligent healthcare analytics platfor
 
 ### Frontend
 
-* Next.js
-* TypeScript
-* React
+* Streamlit
 
 ### Backend
 
@@ -143,8 +141,19 @@ npm run dev
 Open:
 
 ```text
-http://localhost:3000
+http://localhost:8501
 ```
+
+### Deploy the API to Vercel
+
+Vercel uses the FastAPI application in `api_server.py` as its deployment entrypoint:
+
+```text
+api_server:app
+```
+
+The entrypoint is configured in `pyproject.toml`. The Streamlit dashboard is intended
+to run locally or on a Streamlit-compatible hosting service.
 
 ---
 

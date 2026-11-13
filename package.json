@@ -1,0 +1,7 @@
+{
+  "name": "sensoraugmentedhealth",
+  "private": true,
+  "scripts": {
+    "dev": "python -m streamlit run app.py"
+  }
+}
