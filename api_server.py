@@ -5,17 +5,6 @@ import io
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Tuple
-from src.database import (
-    create_tables,
-    save_assessment,
-    get_assessment_history
-)
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import shap
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -27,7 +16,6 @@ from src.risk_interpreter import (
     top_contributors,
     _pretty_feature_name,
 )
-from src.shap_explainer import compute_shap_values, load_model, prepare_shap_inputs
 
 
 class PredictionInput(BaseModel):
@@ -64,8 +52,6 @@ class PredictionResponse(BaseModel):
     waterfall_plot: str
 
 
-create_tables()
-
 app = FastAPI(title="AI Health Risk API", version="1.0")
 app.add_middleware(
     CORSMiddleware,
@@ -87,10 +73,14 @@ def _get_paths() -> Tuple[Path, Path]:
 @lru_cache
 def _get_pipeline():
     _, model_path = _get_paths()
+    from src.shap_explainer import load_model
+
     return load_model(str(model_path))
 
 
-def _prepare_input_df(payload: PredictionInput) -> pd.DataFrame:
+def _prepare_input_df(payload: PredictionInput):
+    import pandas as pd
+
     data = payload.dict()
     return pd.DataFrame([data], columns=FEATURE_COLUMNS)
 
@@ -130,6 +120,9 @@ def _fig_to_base64() -> str:
 
 @lru_cache
 def _get_reference_shap() -> Tuple[np.ndarray, List[str], np.ndarray]:
+    import pandas as pd
+    from src.shap_explainer import compute_shap_values, prepare_shap_inputs
+
     dataset_path, _ = _get_paths()
     pipeline = _get_pipeline()
 
@@ -141,12 +134,24 @@ def _get_reference_shap() -> Tuple[np.ndarray, List[str], np.ndarray]:
 
 
 def _render_summary_plot() -> str:
+    import matplotlib
+    import shap
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
     X_processed, feature_names, shap_values = _get_reference_shap()
     shap.summary_plot(shap_values, X_processed, feature_names=feature_names, show=False,plot_size=None)
     return _fig_to_base64()
 
 
 def _render_bar_plot() -> str:
+    import matplotlib
+    import shap
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
     X_processed, feature_names, shap_values = _get_reference_shap()
     shap.summary_plot(
         shap_values, X_processed, feature_names=feature_names, plot_type="bar", show=False
@@ -155,8 +160,14 @@ def _render_bar_plot() -> str:
 
 
 def _render_waterfall_plot(
-    shap_row: np.ndarray, base_value: float, data_row: np.ndarray, feature_names: List[str]
+    shap_row, base_value: float, data_row, feature_names: List[str]
 ) -> str:
+    import matplotlib
+    import shap
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
     explanation = shap.Explanation(
         values=shap_row,
         base_values=base_value,
@@ -177,6 +188,9 @@ def health_check() -> Dict[str, str]:
     return {"status": "ok"}
 @app.get("/history")
 def history():
+    from src.database import create_tables, get_assessment_history
+
+    create_tables()
 
     rows = get_assessment_history()
 
@@ -223,6 +237,10 @@ def get_model_metrics() -> Dict[str, object]:
 @app.post("/predict", response_model=PredictionResponse)
 def predict(payload: PredictionInput) -> PredictionResponse:
     try:
+        from src.database import create_tables, save_assessment
+        from src.shap_explainer import compute_shap_values, prepare_shap_inputs
+
+        create_tables()
         pipeline = _get_pipeline()
         input_df = _prepare_input_df(payload)
 
