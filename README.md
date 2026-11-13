@@ -155,6 +155,9 @@ api_server:app
 The entrypoint is configured in `pyproject.toml`. The Streamlit dashboard is intended
 to run locally or on a Streamlit-compatible hosting service.
 
+Vercel's build configuration is also defined in `vercel.json` so the deployment uses
+`api_server.py` and installs the dependencies from `requirements.txt`.
+
 ---
 
 ## Model Outputs
